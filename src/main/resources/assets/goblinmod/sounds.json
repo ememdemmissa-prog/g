@@ -1,0 +1,17 @@
+{
+  "goblin_idle": {
+    "sounds": [
+      "goblinmod:goblin_idle"
+    ]
+  },
+  "goblin_hurt": {
+    "sounds": [
+      "goblinmod:goblin_idle"
+    ]
+  },
+  "goblin_death": {
+    "sounds": [
+      "goblinmod:goblin_idle"
+    ]
+  }
+}

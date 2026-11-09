@@ -1,0 +1,7 @@
+{
+  "entity.goblinmod.goblin": "Гоблин-воришка",
+  "item.goblinmod.goblin_spawn_egg": "Яйцо призыва гоблина-воришки",
+  "itemGroup.goblinmod.goblin": "Гоблин-воришка",
+  "message.goblinmod.stolen": "Гоблин-воришка украл %s",
+  "message.goblinmod.steal_failed": "Гоблин-воришка попытался у вас что-то украсть, но у вас пусто"
+}

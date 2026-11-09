@@ -1,0 +1,7 @@
+{
+  "entity.goblinmod.goblin": "Goblin Thief",
+  "item.goblinmod.goblin_spawn_egg": "Goblin Thief Spawn Egg",
+  "itemGroup.goblinmod.goblin": "Goblin Thief",
+  "message.goblinmod.stolen": "Goblin stole %s",
+  "message.goblinmod.steal_failed": "The goblin thief tried to steal from you, but you have nothing"
+}

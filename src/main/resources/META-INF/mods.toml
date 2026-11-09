@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="goblinmod"
+version="${mod_version}"
+displayName="Goblin Mod"
+authors="go1yas"
+description='''Adds a greedy Goblin Thief that steals your items, grabs loot off the ground and runs away.'''
+
+[[dependencies.goblinmod]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.goblinmod]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.goblinmod]]
+    modId="geckolib"
+    mandatory=true
+    versionRange="[4.8.4,)"
+    ordering="AFTER"
+    side="BOTH"
