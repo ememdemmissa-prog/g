@@ -3,8 +3,8 @@
   "biomes": "#goblinmod:goblin_spawn_biomes",
   "spawners": {
     "type": "goblinmod:goblin",
-    "weight": 15,
+    "weight": 10,
     "minCount": 1,
-    "maxCount": 3
+    "maxCount": 1
   }
 }

@@ -16,6 +16,7 @@ public class GoblinFleeGoal extends Goal {
     private static final double SEARCH_RANGE = 24.0;
     private static final int STUCK_TICKS = 10;
     private static final int FAILED_LIFETIME = 100;
+    private static final int SEARCH_COOLDOWN = 10;
 
     private final GoblinEntity goblin;
     private final double speed;
@@ -26,6 +27,7 @@ public class GoblinFleeGoal extends Goal {
     private BlockPos askedPos;
     private BlockPos failedPos;
     private int failedTick;
+    private int nextSearchTick;
 
     public GoblinFleeGoal(GoblinEntity goblin, double speed) {
         this.goblin = goblin;
@@ -35,7 +37,7 @@ public class GoblinFleeGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (!this.goblin.isFleeing()) {
+        if (!this.goblin.isFleeing() || this.goblin.tickCount < this.nextSearchTick) {
             return false;
         }
         LivingEntity target = this.goblin.getTarget();
@@ -47,7 +49,12 @@ public class GoblinFleeGoal extends Goal {
         }
         this.threat = target;
         this.chosen = this.findEscapePath();
-        return this.chosen != null;
+        if (this.chosen == null) {
+            // Each search runs up to 10 pathfinds; don't repeat it every tick when cornered.
+            this.nextSearchTick = this.goblin.tickCount + SEARCH_COOLDOWN;
+            return false;
+        }
+        return true;
     }
 
     @Override

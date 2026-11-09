@@ -5,20 +5,17 @@ import com.goblinmod.ai.GoblinGrabLootGoal;
 import com.goblinmod.registry.ModSounds;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.UnaryOperator;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.particles.BlockParticleOption;
-import net.minecraft.core.particles.DustParticleOptions;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -37,10 +34,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.common.ForgeMod;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Vector3f;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.AnimatableManager;
@@ -55,13 +50,10 @@ public class GoblinEntity extends Monster implements GeoEntity {
     private static final double WALK_SPEED = 0.37;
     private static final double FLEE_SPEED = 0.46;
     private static final int MAX_STOLEN_STACKS = 27;
-    private static final BlockParticleOption DUST = new BlockParticleOption(ParticleTypes.BLOCK, Blocks.DIRT.defaultBlockState());
-    private static final DustParticleOptions GOLD_SPARKLE = new DustParticleOptions(new Vector3f(1.0F, 0.84F, 0.1F), 0.8F);
     private static final RawAnimation WALK_ANIM = RawAnimation.begin().thenLoop("animation.goblin_walk");
     private static final RawAnimation RUN_ANIM = RawAnimation.begin().thenLoop("animation.goblin_run");
     private static final RawAnimation ATTACK_ANIM = RawAnimation.begin().thenPlay("animation.goblin_attack");
     private static final EntityDataAccessor<Boolean> DATA_FLEEING = SynchedEntityData.defineId(GoblinEntity.class, EntityDataSerializers.BOOLEAN);
-    private static final EntityDataAccessor<Boolean> DATA_HAS_LOOT = SynchedEntityData.defineId(GoblinEntity.class, EntityDataSerializers.BOOLEAN);
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private final List<ItemStack> stolenItems = new ArrayList<>();
@@ -97,7 +89,7 @@ public class GoblinEntity extends Monster implements GeoEntity {
         this.goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 0.8));
         this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
         this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
-        this.targetSelector.addGoal(1, new HurtByTargetGoal(this).setAlertOthers());
+        this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, 6, true, false, null));
     }
 
@@ -126,56 +118,31 @@ public class GoblinEntity extends Monster implements GeoEntity {
         }
     }
 
-    /** Goblins have an eye for treasure: rare and enchanted items are far more likely to be picked. */
-    private static int greedWeight(ItemStack stack) {
-        int weight = switch (stack.getRarity()) {
-            case COMMON -> 1;
-            case UNCOMMON -> 4;
-            case RARE -> 8;
-            case EPIC -> 12;
-        };
-        if (stack.isEnchanted()) {
-            weight += 6;
-        }
-        return weight;
-    }
-
     private void stealFrom(Player player) {
         Inventory inventory = player.getInventory();
-        int totalWeight = 0;
-        int[] weights = new int[inventory.items.size()];
-        for (int i = 0; i < weights.length; i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (!stack.isEmpty()) {
-                weights[i] = greedWeight(stack);
-                totalWeight += weights[i];
+        // Reservoir sampling: uniform random non-empty slot in one pass, no allocation.
+        int slot = -1;
+        int seen = 0;
+        for (int i = 0; i < inventory.items.size(); i++) {
+            if (!inventory.items.get(i).isEmpty() && this.random.nextInt(++seen) == 0) {
+                slot = i;
             }
         }
 
-        if (totalWeight == 0 || !this.canCarryMore()) {
+        if (slot < 0 || !this.canCarryMore()) {
             this.showActionBar(player, Component.translatable("message.goblinmod.steal_failed").withStyle(ChatFormatting.GRAY));
             return;
         }
 
-        int roll = this.random.nextInt(totalWeight);
-        int slot = 0;
-        while (roll >= weights[slot]) {
-            roll -= weights[slot++];
-        }
-
-        ItemStack stolen = inventory.getItem(slot).copy();
-        this.stolenItems.add(stolen);
+        ItemStack stolen = inventory.items.get(slot);
         inventory.setItem(slot, ItemStack.EMPTY);
+        this.stolenItems.add(stolen);
         player.inventoryMenu.broadcastChanges();
 
-        Component name = stolen.getHoverName().copy().withStyle(stolen.getRarity().getStyleModifier());
-        this.showActionBar(player, Component.translatable("message.goblinmod.stolen", name).withStyle(stolen.getRarity().getStyleModifier()));
-        // Higher pitch so the theft sounds like a cackle rather than the regular idle call.
-        this.playSound(ModSounds.GOBLIN_IDLE.get(), 1.0F, 1.5F);
-        this.playSound(SoundEvents.ITEM_PICKUP, 0.6F, 0.8F);
-        if (this.level() instanceof ServerLevel server) {
-            server.sendParticles(ParticleTypes.POOF, this.getX(), this.getY() + 0.6, this.getZ(), 8, 0.25, 0.3, 0.25, 0.02);
-        }
+        UnaryOperator<Style> style = stolen.getRarity().getStyleModifier();
+        Component name = stolen.getHoverName().copy().withStyle(style);
+        this.showActionBar(player, Component.translatable("message.goblinmod.stolen", name).withStyle(style));
+        this.playSound(ModSounds.GOBLIN_IDLE.get(), 1.0F, 1.0F);
     }
 
     public boolean canCarryMore() {
@@ -187,7 +154,6 @@ public class GoblinEntity extends Monster implements GeoEntity {
         this.take(item, stack.getCount());
         this.stolenItems.add(stack.copy());
         item.discard();
-        this.playSound(SoundEvents.ITEM_PICKUP, 0.4F, 1.4F + this.random.nextFloat() * 0.3F);
     }
 
     private void showActionBar(Player player, Component text) {
@@ -198,39 +164,21 @@ public class GoblinEntity extends Monster implements GeoEntity {
         return this.entityData.get(DATA_FLEEING);
     }
 
-    public boolean hasLoot() {
-        return this.entityData.get(DATA_HAS_LOOT);
-    }
-
     @Override
     protected void defineSynchedData() {
         super.defineSynchedData();
         this.entityData.define(DATA_FLEEING, false);
-        this.entityData.define(DATA_HAS_LOOT, false);
     }
 
     @Override
     public void tick() {
         super.tick();
-        if (this.fleeTicks > 0) {
-            this.fleeTicks--;
-        }
-
-        Level level = this.level();
-        if (!level.isClientSide) {
+        if (!this.level().isClientSide) {
+            if (this.fleeTicks > 0) {
+                this.fleeTicks--;
+            }
             this.tickAttack();
             this.entityData.set(DATA_FLEEING, this.fleeTicks > 0);
-            this.entityData.set(DATA_HAS_LOOT, !this.stolenItems.isEmpty());
-            return;
-        }
-
-        if (this.onGround() && this.getDeltaMovement().horizontalDistanceSqr() > 0.02 && this.tickCount % 4 == 0) {
-            double dx = (this.random.nextDouble() - 0.5) * 0.4;
-            double dz = (this.random.nextDouble() - 0.5) * 0.4;
-            level.addParticle(DUST, this.getX() + dx, this.getY() + 0.05, this.getZ() + dz, 0.0, 0.01, 0.0);
-        }
-        if (this.hasLoot() && this.tickCount % 6 == 0) {
-            level.addParticle(GOLD_SPARKLE, this.getRandomX(0.6), this.getRandomY(), this.getRandomZ(0.6), 0.0, 0.0, 0.0);
         }
     }
 
